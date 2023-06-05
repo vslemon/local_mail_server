@@ -1,0 +1,13 @@
+set realname = "{{ item.realname }}"
+set from = "{{ item.from }}"
+
+# Configure the IMAP server
+set imap_user = "{{ item.imap_user }}"
+set imap_pass = "{{ item.imap_pass }}"
+set imap_check_subscribed = yes
+set imap_keepalive = 900
+set spoolfile = "{{ item.spoolfile }}"
+
+# Configure the SMTP server
+set smtp_url = "{{ item.smtp_url }}"
+set smtp_pass = "{{ item.smtp_pass }}"

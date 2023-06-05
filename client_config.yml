@@ -1,0 +1,64 @@
+---
+- name: Client Configuration
+  hosts: client
+  gather_facts: true
+  become: true
+
+  vars:
+    home_dir: /home
+    # set vars to populate the .muttrc template and create users
+    users:
+      - name: user1
+        password: '1'
+        realname: "User 1"
+        from: "user1@localhost.com"
+        imap_user: "user1"
+        imap_pass: "1"
+        spoolfile: "imap://user1@replace_with_server_IP/INBOX"
+        smtp_url: "smtp://user1@replace_with_server_IP/"
+        smtp_pass: "1"
+
+      - name: user2
+        password: '2'
+        realname: "User 2"
+        from: "user2@localhost.com"
+        imap_user: "user2"
+        imap_pass: "2"
+        spoolfile: "imap://user2@replace_with_server_IP/INBOX"
+        smtp_url: "smtp://user2@replace_with_server_IP/"
+        smtp_pass: "2"
+
+  tasks:
+    # Creates user1 and user2 for testing 
+    - name: Create users and set passwords
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}"
+        update_password: always
+        shell: /bin/bash
+        createhome: yes
+      loop: "{{ users }}"
+    
+    # Installs Mutt command line mail client
+    - name: Install Mutt on the client
+      apt:
+        name: mutt
+        state: present
+        
+    # Configuration file for Mutt mail client
+    - name: Create empty .muttrc file for user1
+      file:
+        path: "/home/user1/.muttrc"
+        state: touch
+
+    - name: Create empty .muttrc file for user2
+      file:
+        path: "/home/user2/.muttrc"
+        state: touch
+        
+    # Populate the .muttrc file with the proper settings for each user
+    - name: Configure .muttrc files for users
+      template:
+        src: muttrc.j2
+        dest: "{{ home_dir }}/{{ item.name }}/.muttrc"
+      loop: "{{ users }}"

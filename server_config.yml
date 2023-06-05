@@ -1,0 +1,96 @@
+---
+- name: Server Configuration
+  hosts: server
+  gather_facts: true
+  become: true
+
+  vars:
+    users:
+      # Only for demonstration purposes
+      - { name: user1, password: '1' }
+      - { name: user2, password: '2' }
+
+  tasks:
+    # Creates user1 and user2 for testing 
+    - name: Create users and set passwords
+      user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}"
+        update_password: always
+        shell: /bin/bash
+        createhome: yes
+      loop: "{{ users }}"
+      
+    # Creates Maildir/new, Maildir/cur and Maildir/tmp directories in each users home folder 
+    - name: Create Maildir structure on server
+      file:
+        path: "/home/{{ item.name }}/Maildir/{{ item.subfolder }}"
+        state: directory
+        mode: 0700
+        owner: "{{ item.name }}"
+        group: "{{ item.name }}"
+      loop:
+       - { name: user1, subfolder: "new" }
+       - { name: user1, subfolder: "cur" }
+       - { name: user1, subfolder: "tmp" }
+       - { name: user2, subfolder: "new" }
+       - { name: user2, subfolder: "cur" }
+       - { name: user2, subfolder: "tmp" }
+    
+    # Answering debconf package installation questions
+    - name: Configure Postfix mailer type
+      debconf:
+       name: postfix
+       question: postfix/main_mailer_type
+       value: 'Internet Site'
+       vtype: string
+
+    - name: Configure Postfix domain name
+      debconf:
+       name: postfix
+       question: postfix/mailname
+       value: 'localhost.com'
+       vtype: string
+    
+    # Installing SMTP and IMAP/POP3 servers
+    - name: Install Postfix & Dovecot
+      apt:
+        name:
+          - postfix
+          - dovecot-imapd
+          - dovecot-pop3d
+        state: present
+        
+    # Use maildir format
+    - name: Integrate Dovecot with Postfix
+      lineinfile:
+       path: /etc/postfix/main.cf
+       line: "{{ item }}"
+      with_items:
+      - 'home_mailbox = Maildir/'
+      - 'mailbox_command ='
+    
+    # Dovecot configuration
+    - name: Configure Dovecot
+      lineinfile:
+       path: /etc/dovecot/dovecot.conf
+       line: "{{ item }}"
+      with_items:
+      - 'protocols = imap'
+      - 'disable_plaintext_auth = no'
+
+    - name: Set Maildir location
+      lineinfile:
+       path: /etc/dovecot/conf.d/10-mail.conf
+       regexp: 'mail_location = mbox:~/mail:INBOX=/var/mail/%u'
+       line: 'mail_location = maildir:~/Maildir'
+
+    - name: Restart Postfix service
+      service:
+        name: postfix
+        state: restarted
+
+    - name: Restart Dovecot service
+      service:
+        name: dovecot
+        state: restarted
